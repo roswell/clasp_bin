@@ -1,0 +1,61 @@
+name: CI
+on:
+  push:
+    tags: [ "*" ]
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: version
+        id: version
+        run: |
+          echo "::set-output name=VERSION::${GITHUB_REF#refs/tags/}"
+
+      - name: install
+        run: |
+          sudo apt update
+          sudo apt -y install clang-9 libclang-9-dev cmake libgc-dev libgmp-dev binutils-dev zlib1g-dev libncurses-dev libboost-filesystem-dev libboost-regex-dev libboost-date-time-dev libboost-program-options-dev libboost-system-dev libboost-iostreams-dev libunwind-dev liblzma-dev libelf1 libelf-dev libbsd-dev sbcl
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: build
+        run: |
+          git clone https://github.com/clasp-developers/clasp
+          cd clasp
+          git checkout `cat ../hash`
+          echo "USE_PARALLEL_BUILD  = True" > wscript.config
+          echo "LINK_STATIC = True" >> wscript.config
+          ./waf configure build_dboehm
+          make
+
+      - name: test
+        run: |
+          clasp/build/boehm/iclasp-boehm -e '(core:quit)'
+
+      - name: archive
+        run: |
+          rm clasp/build/clasp clasp/build/boehm/cclasp-boehm
+          mv clasp/build clasp-${{ steps.version.outputs.VERSION }}-x86-64-linux-binary
+          tar czf clasp-${{ steps.version.outputs.VERSION }}-x86-64-linux-binary.tar.gz clasp-${{ steps.version.outputs.VERSION }}-x86-64-linux-binary
+
+      - name: release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: upload
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_name: clasp-${{ steps.version.outputs.VERSION }}-x86-64-linux-binary.tar.gz
+          asset_path: ./clasp-${{ steps.version.outputs.VERSION }}-x86-64-linux-binary.tar.gz
+          asset_content_type: application/gzip
