@@ -26,9 +26,9 @@ jobs:
           cd ${{ steps.env.outputs.DIR }}
           git checkout `cat ../hash`
           patch -p1 < ../clasp.patch
-          echo "USE_PARALLEL_BUILD  = True" > wscript.config
+          #echo "USE_PARALLEL_BUILD  = True" > wscript.config
           echo "LINK_STATIC = True" >> wscript.config
-          ./waf configure build_dboehm
+          ./waf -v configure build_dboehm
           make
 
       - name: test

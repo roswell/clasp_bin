@@ -1,5 +1,17 @@
+diff --git a/include/clasp/core/mpPackage.fwd.h b/include/clasp/core/mpPackage.fwd.h
+index 5f148c165..65d80a8c6 100644
+--- a/include/clasp/core/mpPackage.fwd.h
++++ b/include/clasp/core/mpPackage.fwd.h
+@@ -34,6 +34,7 @@ THE SOFTWARE.
+ #include <array>
+ #include <unordered_map>
+ #include <vector>
++#include <memory>
+ 
+ PACKAGE_USE("COMMON-LISP");
+ NAMESPACE_PACKAGE_ASSOCIATION(mp, MpPkg, "MP")
 diff --git a/wscript b/wscript
-index 95f886737..2495bd930 100644
+index 8103e3de2..4072b5567 100644
 --- a/wscript
 +++ b/wscript
 @@ -1018,7 +1018,7 @@ def configure(cfg):
