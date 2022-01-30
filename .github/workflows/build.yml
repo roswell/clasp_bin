@@ -5,6 +5,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
+    container:
+      image: ubuntu:21.10
     steps:
       - name: env
         id: env
@@ -14,32 +16,49 @@ jobs:
           echo "::set-output name=FILE::clasp-${GITHUB_REF#refs/tags/}-x86-64-linux-binary.tar.gz"
       - name: install
         run: |
-          sudo apt update
-          sudo apt -y install clang-9 libclang-9-dev cmake libgc-dev libgmp-dev binutils-dev zlib1g-dev libncurses-dev libboost-filesystem-dev libboost-regex-dev libboost-date-time-dev libboost-program-options-dev libboost-system-dev libboost-iostreams-dev libunwind-dev liblzma-dev libelf1 libelf-dev libbsd-dev sbcl
+          apt update
+          apt install -y tzdata
+          apt install -y sbcl git make build-essential curl libboost-filesystem-dev libboost-graph-dev libboost-regex-dev libboost-date-time-dev libboost-program-options-dev libboost-system-dev libboost-iostreams-dev libgmp-dev libffi-dev zlib1g-dev libelf-dev libncurses-dev libbsd-dev llvm-13 clang-13 libclang-13-dev python wget libgc-dev language-pack-en
 
       - name: checkout
         uses: actions/checkout@v2
 
-      - name: build
+      - name: build_boehm
+        run: |
+          git clone https://github.com/clasp-developers/clasp-boehm
+          cd clasp-boehm
+          patch -p1 < ../clasp-boehm.patch
+          mkdir -p /opt/clasp-support
+          make get
+          make build
+          make -C gc-8.0.4 install
+
+      - name: build_clasp
         run: |
           git clone https://github.com/clasp-developers/clasp ${{ steps.env.outputs.DIR }}
           cd ${{ steps.env.outputs.DIR }}
           git checkout `cat ../hash`
-          patch -p1 < ../clasp.patch
-          #echo "USE_PARALLEL_BUILD  = True" > wscript.config
-          echo "LINK_STATIC = True" >> wscript.config
-          ./waf -v configure build_dboehm
-          make
+          cp wscript.config.debian10 wscript.config
+          echo 'INCLUDES = ["/opt/clasp-support/include"]' >> wscript.config
+          echo 'LINKFLAGS = ["-L/opt/clasp-support/lib"]' >> wscript.config
+          #patch -p1 < ../clasp.patch
+          ./waf distclean
+          ./waf configure
+          ./waf build_dboehmprecise
+          cd build
+          rm -f clasp
+          ln -s boehmprecise/clasp
+          cd boehm
+          rm -f iclasp-boehm
+          ln -s ../boehmprecise/clasp iclasp-boehm
 
       - name: test
         run: |
-          ${{ steps.env.outputs.DIR }}/build/boehm/iclasp-boehm -e '(core:quit)'
+          ${{ steps.env.outputs.DIR }}/build/boehmprecise/iclasp-boehmprecise -e '(core:quit)'
 
       - name: archive
         run: |
-          rm ${{ steps.env.outputs.DIR }}/build/clasp
-          rm ${{ steps.env.outputs.DIR }}/build/boehm/cclasp-boehm
-          tar czf ${{ steps.env.outputs.FILE }} ${{ steps.env.outputs.DIR }}/build
+         tar czf ${{ steps.env.outputs.FILE }} ${{ steps.env.outputs.DIR }}/build
 
       - name: release
         id: create_release
