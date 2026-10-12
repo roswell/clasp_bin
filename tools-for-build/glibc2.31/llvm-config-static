@@ -1,0 +1,9 @@
+#!/bin/sh
+case " $* " in
+  *" --libs "*)
+    c=$(ls /usr/lib/llvm-$LLVM/lib/libclang*.a | sed -e 's#.*/lib#-l#' -e 's#\.a$##' | tr '\n' ' ')
+    l=$(/usr/bin/llvm-config-$LLVM --link-static "$@")
+    echo "-Wl,--start-group $c $l -Wl,--end-group";;
+  *" --system-libs "*) echo "-lrt -ldl -lm";;
+  *) exec /usr/bin/llvm-config-$LLVM "$@";;
+esac

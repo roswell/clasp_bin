@@ -1,82 +1,46 @@
-name: CI
+name: build
 on:
-  push:
-    tags: [ "*" ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: clasp release to build
+        default: '3.0.1'
+      ref:
+        description: clasp commit to build instead of the release tarball
+        default: ''
 jobs:
   build:
-    runs-on: ubuntu-20.04
-    container:
-      image: ubuntu:21.10
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: x86-64, os: ubuntu-latest}
+          - {arch: arm64, os: ubuntu-24.04-arm}
+    env:
+      VERSION: ${{ github.event.inputs.version }}
+      REF: ${{ github.event.inputs.ref }}
+      FILE: clasp-${{ github.event.inputs.version }}-${{ matrix.arch }}-linux-binary.tar.gz
     steps:
-      - name: env
-        id: env
-        run: |
-          echo "::set-output name=VERSION::${GITHUB_REF#refs/tags/}"
-          echo "::set-output name=DIR::clasp-${GITHUB_REF#refs/tags/}-x86-64-linux"
-          echo "::set-output name=FILE::clasp-${GITHUB_REF#refs/tags/}-x86-64-linux-binary.tar.gz"
-      - name: install
-        run: |
-          apt update
-          apt install -y tzdata
-          apt install -y sbcl git make build-essential curl libboost-filesystem-dev libboost-graph-dev libboost-regex-dev libboost-date-time-dev libboost-program-options-dev libboost-system-dev libboost-iostreams-dev libgmp-dev libffi-dev zlib1g-dev libelf-dev libncurses-dev libbsd-dev llvm-13 clang-13 libclang-13-dev python wget libgc-dev language-pack-en
-
-      - name: checkout
-        uses: actions/checkout@v2
-
-      - name: build_boehm
-        run: |
-          git clone https://github.com/clasp-developers/clasp-boehm
-          cd clasp-boehm
-          patch -p1 < ../clasp-boehm.patch
-          mkdir -p /opt/clasp-support
-          make get
-          make build
-          make -C gc-8.0.4 install
-
-      - name: build_clasp
-        run: |
-          git clone https://github.com/clasp-developers/clasp ${{ steps.env.outputs.DIR }}
-          cd ${{ steps.env.outputs.DIR }}
-          git checkout `cat ../hash`
-          cp wscript.config.debian10 wscript.config
-          echo 'INCLUDES = ["/opt/clasp-support/include"]' >> wscript.config
-          echo 'LINKFLAGS = ["-L/opt/clasp-support/lib"]' >> wscript.config
-          #patch -p1 < ../clasp.patch
-          ./waf distclean
-          ./waf configure
-          ./waf build_dboehmprecise
-          cd build
-          rm -f clasp
-          ln -s boehmprecise/clasp
-          cd boehm
-          rm -f iclasp-boehm
-          ln -s ../boehmprecise/clasp iclasp-boehm
-
+      - uses: actions/checkout@v4
+      - name: image
+        run: docker build -t clasp-build tools-for-build/glibc2.31
+      - name: build
+        run: docker run --rm -v $PWD:/w -w /w -e VERSION -e REF -e JOBS=4 clasp-build sh /w/build.sh
       - name: test
         run: |
-          ${{ steps.env.outputs.DIR }}/build/boehmprecise/iclasp-boehmprecise -e '(core:quit)'
-
-      - name: archive
-        run: |
-         tar czf ${{ steps.env.outputs.FILE }} ${{ steps.env.outputs.DIR }}/build
-
-      - name: release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          for image in ubuntu:20.04 debian:11-slim debian:trixie-slim fedora:42; do
+            docker run --rm -v $PWD:/w:ro $image sh /w/test.sh /w/$FILE
+          done
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
-
+          name: ${{ env.FILE }}
+          path: ${{ env.FILE }}
       - name: upload
-        uses: actions/upload-release-asset@v1
+        if: ${{ github.repository == 'roswell/clasp_bin' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: ${{ steps.env.outputs.FILE }}
-          asset_path: ./${{ steps.env.outputs.FILE }}
-          asset_content_type: application/gzip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view $VERSION || gh release create $VERSION --title $VERSION --notes ""
+          gh release upload $VERSION $FILE --clobber
