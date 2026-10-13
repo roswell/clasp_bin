@@ -34,7 +34,6 @@ cp -a /opt/clasp/share/clasp/. $D/
 find $D -maxdepth 1 -type f -exec mv {} $D/build/boehmprecise/generated/ \;
 cp -a /opt/clasp/bin/iclasp $D/build/boehmprecise/
 strip --strip-debug $D/build/boehmprecise/iclasp
-ln -s iclasp $D/build/boehmprecise/clasp
 cp -a /opt/clasp/lib/clasp $D/build/boehmprecise/lib
 rm -f $D/build/boehmprecise/lib/*.a
 ldd $D/build/boehmprecise/iclasp > $D/build/boehmprecise/ldd.txt
