@@ -2,6 +2,7 @@
 set -ex
 VERSION=${VERSION:-3.0.1}
 JOBS=${JOBS:-2}
+VERSION_SUFFIX=${VERSION_SUFFIX-.roswell}
 ARCH=`uname -m | sed -e s/aarch64/arm64/ -e s/x86_64/x86-64/`
 NAME=clasp-$VERSION-$ARCH-linux
 OUT=`pwd`
@@ -17,7 +18,7 @@ else
   cd clasp-$VERSION
   SYNC=--skip-sync
 fi
-./koga $SYNC --jobs=$JOBS --static-linking --no-clang-cpp \
+./koga $SYNC --version=$VERSION$VERSION_SUFFIX --nm=nm --jobs=$JOBS --static-linking --no-clang-cpp \
   --llvm-config=/usr/local/bin/llvm-config-static --build-path=build/ \
   --bin-path=/opt/clasp/bin/ --lib-path=/opt/clasp/lib/clasp/ \
   --share-path=/opt/clasp/share/clasp/ --dylib-path=/opt/clasp/lib/ \
